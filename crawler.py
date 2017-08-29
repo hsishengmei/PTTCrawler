@@ -8,14 +8,14 @@ from wrapper import WordWrapper, DateWrapper
 from subprocess import Popen
 
 # --------------------------------------------------------------------------------------------------
-# functions for download
+# download functions
 # --------------------------------------------------------------------------------------------------
 
 def downloadPage(filename, forumName, page, link, directory):
     a = time.time()
     pageText = getPageText(link)
     b = time.time()
-    # directory = 'ptt_new/' + forumName + '/' + dateStr + '/'
+    # directory = 'ptt/' + forumName + '/' + dateStr + '/'
     directory += str(page) + '/'
     if not os.path.exists(directory):
         os.makedirs(directory)
@@ -25,52 +25,38 @@ def downloadPage(filename, forumName, page, link, directory):
     f.close()
     print('download to %s, time: %f' % (filePath, round(b-a, 2)))
 
-def downloadForum(forumName, startPage, totalPage, directory):
-    pageNum=startPage
-    errorCount=0
-    for i in range(totalPage):
-        # if(i % 5 == 0):
-        #     time.sleep(2)
-        articleCount=0
-        prevPage='https://www.ptt.cc/bbs/'+forumName+'/index'+str(pageNum)+'.html'
-        print('page', pageNum)
-        try:
-            pageText = getPageText(prevPage)
-        except Exception as e:
-            print('Error: getPageText')
-            errorCount += 1
-            if(errorCount >= 3):
-                pageNum -= 1
-            continue
+def downloadIndexPage(forumName, indexNum, directory):
+    
+    url='https://www.ptt.cc/bbs/'+forumName+'/index'+str(indexNum)+'.html'
+    print('page', indexNum)
+    
+    pageText = getPageText(url)
 
-        soup = BeautifulSoup(pageText, 'lxml')
-        articles = soup.find_all('div', 'r-ent')
+    soup = BeautifulSoup(pageText, 'lxml')
+    articles = soup.find_all('div', 'r-ent')
 
-        NOT_EXIST = BeautifulSoup('<a>本文已被刪除</a>', 'lxml').a
+    NOT_EXIST = BeautifulSoup('<a>本文已被刪除</a>', 'lxml').a
 
-        for article in articles:
-            meta = article.find('div', 'title').find('a') or NOT_EXIST
-            if(meta == NOT_EXIST):
-                link = 'empty'
-                print(link)
-            else:
-                link = meta.get('href')
-                print(link, end=' ')
-                try:    
-                    downloadPage(str(articleCount), forumName, pageNum, 'https://www.ptt.cc'+link, directory)
-                except Exception as e:
-                    print(' Error: downloadPage')
-            articleCount += 1
-        #next page
-        pageNum += 1
+    articleCount=0
+    for article in articles:
+        meta = article.find('div', 'title').find('a') or NOT_EXIST
+        if(meta == NOT_EXIST):
+            link = 'empty'
+            print(link)
+        else:
+            link = meta.get('href')
+            print(link, end=' ')
+            downloadPage(str(articleCount), forumName, indexNum, 'https://www.ptt.cc'+link, directory)
+        articleCount += 1
 
 def downloadMissingPage(forumName, startPage, endPage, directory):
-    print('downloading', forumName, 'from page', startPage, 'to', endPage, '...')
-    for page in range(startPage, endPage+1):
-        if not os.path.isdir(directory):
+
+    print('downloading', forumName, 'from page', startPage, 'to', endPage)
+    for indexNum in range(startPage, endPage+1):
+        if not os.path.isdir(directory + str(indexNum) + '/'):
             try:                
-                print('page', page, 'missing')
-                downloadForum(forumName, page, 1, directory)
+                print('page', indexNum, 'missing')
+                downloadIndexPage(forumName, indexNum, directory)
             except Exception as e:
                  print('Error: incorrect directory', directory)
 
@@ -83,9 +69,8 @@ def downloadMultiProcess(forumName, startPage, endPage, n_processes, dateStr):
     start.append(endPage+1)
     print(start)
 
-    # write a summary file  
-    
-    directory = 'ptt_new/' + forumName + '/' + dateStr + '/'  
+    # write a summary file      
+    directory = 'ptt/' + forumName + '/' + dateStr + '/'  
     if not os.path.exists(directory):
         os.makedirs(directory)
     filePath = directory + 'summary.txt'
@@ -94,9 +79,8 @@ def downloadMultiProcess(forumName, startPage, endPage, n_processes, dateStr):
     f.close()
 
     for i in range(n_processes):
-        Popen(['python3', 'crawler.py', '-d', 'Gossiping', str(start[i]), str(start[i+1]-start[i]), dateStr])
-
-
+        # downloadMissingPage
+        Popen(['python3', 'crawler.py', '-d', 'Gossiping', str(start[i]), str(start[i+1]), dateStr])
 
 # --------------------------------------------------------------------------------------------------
 # get functions
@@ -323,35 +307,37 @@ def searchKeyword(text,wordList):
     return cnt
 
 # --------------------------------------------------------------------------------------------------
-# main
+# options
 # --------------------------------------------------------------------------------------------------
-def main():
-    if(len(sys.argv) == 1): # no option
-        argv = ['-h']
-    else:
-        argv=sys.argv[1:]
-    
+
+def readOptions():
+    f = open('options.txt', 'r')
+    options = f.read().split('\n')
+    for i in options:
+        print(i)
+
+
+def doOptions(argv):
     u_help = '-h'
-    u_download = '-d "forumName" "date(MMDD)"\n -d "forumName" "startPage" "pages" "date(MMDD)"'
+    u_download = '-d "forumName" "date(MMDD)"\n            | -d "forumName" "startPage" "pages" "date(MMDD)"'
     u_search = '-s "forumName" "date(MMDD)" [-kw -id -ip] (id or ip)'
 
     if(argv[0] == '-h'):
         print('[OPTION]    | [USAGE]') 
         print('HELP        |', u_help)
         print('DOWNLOAD    |', u_download)
-        print('SEARCH      |')
-        print(' -from file |', u_search)
+        print('SEARCH      |', u_search)
     elif(argv[0] == '-d'):
         if(len(argv) == 5):
             # -d "forumName" "startPage" "pages" "date(MMDD)"
             start = time.time()
             forumName = argv[1]
             startPage = int(argv[2])
-            pages = int(argv[3])
+            endPage = int(argv[3])
             dateStr = argv[4]
-            directory = 'ptt_new/' + forumName + '/' + dateStr + '/'
+            directory = 'ptt/' + forumName + '/' + dateStr + '/'
 
-            downloadForum(forumName, startPage, pages, directory)
+            downloadMissingPage(forumName, startPage, endPage, directory)
 
             end = time.time()
             print('time:', end - start, 'seconds')
@@ -365,8 +351,7 @@ def main():
             n_processes = 8
 
             downloadMultiProcess(forumName, dateCP[1], dateCP[0], n_processes, dateStr)
-            #downloadMissingPage(forumName, dateCP[1], dateCP[0])
-            #downloadForum(forumName, startPage, pages)
+
             end = time.time()
             print('time:', end - start, 'seconds')
         else:
@@ -403,7 +388,7 @@ def main():
         fileCount = 0
         emptyFile = 0
 
-        directory = 'ptt_new/' + forumName + '/' + dateStr + '/'
+        directory = 'ptt/' + forumName + '/' + dateStr + '/'
         if not os.path.exists(directory):
             print('Error: No such forum or not downloaded yet ', end='')
             print('('+forumName+')')
@@ -468,6 +453,7 @@ def main():
             print('In', forumName, 'from page', pageStr[0], 'to', pageStr[1])
             if(en_titleSearch): print('Total titles that contain', titleword, ':', a_count)
             ww.printSummary()
+
         elif(opt == '-id'):
             givenID = False
             matchCount = []
@@ -553,12 +539,23 @@ def main():
                             print(i, end=' ')
                         print()
                     index += 1
+                    
         else:
             print('option not correct')
             sys.exit()
 
+# --------------------------------------------------------------------------------------------------
+# main
+# --------------------------------------------------------------------------------------------------
+def main():
+    if(len(sys.argv) == 1): # no option
+        argv = ['-h']
+    else:
+        argv=sys.argv[1:]
+    # readOptions()
+    doOptions(argv)
     
-
+  
 if __name__ == '__main__':
     main()
 
