@@ -309,25 +309,30 @@ def searchKeyword(text,wordList):
 # --------------------------------------------------------------------------------------------------
 # options
 # --------------------------------------------------------------------------------------------------
+def removeSpacesAndSplit(line):
+	return ' '.join(line.split()).split()
+
+def printHelp():
+    u_help = '-h'
+    u_download = '-d "forumName" "date(MMDD)"\n            | -d "forumName" "startPage" "pages" "date(MMDD)"'
+    u_search = '-s "forumName" "date(MMDD)" [-kw -id -ip] (id or ip)'
+    u_dofile = '-f'
+
+    print('[OPTION]    | [USAGE]') 
+    print('HELP        |', u_help)
+    print('DOWNLOAD    |', u_download)
+    print('SEARCH      |', u_search)
+    print('DOFILE      |', u_dofile)	
 
 def readOptions():
     f = open('options.txt', 'r')
     options = f.read().split('\n')
-    for i in options:
-        print(i)
-
+    for option in options:
+        argv = removeSpacesAndSplit(line)
+        doOptions(argv)
 
 def doOptions(argv):
-    u_help = '-h'
-    u_download = '-d "forumName" "date(MMDD)"\n            | -d "forumName" "startPage" "pages" "date(MMDD)"'
-    u_search = '-s "forumName" "date(MMDD)" [-kw -id -ip] (id or ip)'
-
-    if(argv[0] == '-h'):
-        print('[OPTION]    | [USAGE]') 
-        print('HELP        |', u_help)
-        print('DOWNLOAD    |', u_download)
-        print('SEARCH      |', u_search)
-    elif(argv[0] == '-d'):
+    if(argv[0] == '-d'):
         if(len(argv) == 5):
             # -d "forumName" "startPage" "pages" "date(MMDD)"
             start = time.time()
@@ -541,8 +546,11 @@ def doOptions(argv):
                     index += 1
                     
         else:
-            print('option not correct')
-            sys.exit()
+        	print('option not correct: [-kw -id -ip]')
+
+    else:
+        printHelp()
+        sys.exit()
 
 # --------------------------------------------------------------------------------------------------
 # main
@@ -551,9 +559,10 @@ def main():
     if(len(sys.argv) == 1): # no option
         argv = ['-h']
     else:
-        argv=sys.argv[1:]
-    # readOptions()
-    doOptions(argv)
+        argv = sys.argv[1:]
+
+    if(argv[0] == '-f'): readOptions()
+    else: doOptions(argv)
     
   
 if __name__ == '__main__':
