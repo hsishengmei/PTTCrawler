@@ -1,11 +1,11 @@
 import requests
-#from multiprocessing import Process
 from bs4 import BeautifulSoup
 import time
 import sys, os
-from enum import Enum
 from wrapper import WordWrapper, DateWrapper
 from subprocess import Popen
+import numpy as np
+import matplotlib.pyplot as plt
 
 # --------------------------------------------------------------------------------------------------
 # get functions
@@ -232,16 +232,33 @@ def searchKeyword(text,wordList):
     return cnt
 
 # --------------------------------------------------------------------------------------------------
+# plot
+# --------------------------------------------------------------------------------------------------
+
+def plotHisto(names, numbers, title, show = False):
+    N = len(numbers)
+    ind = np.arange(N)    # the x locations for the groups
+    width = 0.5      # the width of the bars: can also be len(x) sequence
+
+    p1 = plt.bar(ind, numbers, width)
+    plt.title(title)
+    plt.xticks(ind, names, rotation=15)
+
+    if(show): plt.show()
+    else:  plt.savefig(filename=title+'.png', format='png')
+
+# --------------------------------------------------------------------------------------------------
 # options
 # --------------------------------------------------------------------------------------------------
+
 def removeSpacesAndSplit(line):
-	return ' '.join(line.split()).split()
+    return ' '.join(line.split()).split()
 
 def readOptions():
     f = open('options.txt', 'r')
     options = f.read().split('\n')
     for option in options:
-        argv = removeSpacesAndSplit(line)
+        argv = removeSpacesAndSplit(option)
         doOptions(argv)
 
 def doOptions(argv):
@@ -387,6 +404,7 @@ def doOptions(argv):
                             print(i, end=' ')
                         print()
                     index += 1
+                plotHisto(idList, matchCount, dateStr + ' ' + forumName + ' ID search')
 
         elif(opt == '-ip'):
             givenIP = False
@@ -430,20 +448,22 @@ def doOptions(argv):
                             print(i, end=' ')
                         print()
                     index += 1
+                plotHisto(ipList, matchCount, dateStr + ' ' + forumName + ' IP search')
                     
         else:
-        	print('option not correct: [-kw -id -ip] (id or ip)')
+            print('option not correct: [-kw -id -ip] (id or ip)')
 
     else:        
-	    print('[OPTION]    | [USAGE]') 
-	    print('HELP        |', u_help)
-	    print('SEARCH      |', u_search)
-	    print('DOFILE      |', u_dofile)
-	    sys.exit()
+        print('[OPTION]    | [USAGE]') 
+        print('HELP        |', u_help)
+        print('SEARCH      |', u_search)
+        print('DOFILE      |', u_dofile)
+        sys.exit()
 
 # --------------------------------------------------------------------------------------------------
 # main
 # --------------------------------------------------------------------------------------------------
+
 def main():
     if(len(sys.argv) == 1): # no option
         argv = ['-h']
