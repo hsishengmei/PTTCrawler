@@ -162,34 +162,39 @@ def getIndexDate(forumName, dateStr):
     return indexRange
 
 # search from file
-def searchText(text,keyword, ww):
+def searchText(text, wwList):
     #a = time.time()
-    soup = BeautifulSoup(text, 'lxml')
-    #title
-    title = getTitle(soup)
-    n_t = searchKeyword(title,keyword)
-    ww.titleNum += n_t
-    #content
-    content = getContent(soup)
-    n_ct = searchKeyword(content,keyword)
-    ww.contentNum += n_ct
-    #pushes
-    pushes = soup.find_all('div', 'push')
-    n_cm_total = 0
-    for push in pushes:
-        #ptt_id = push.find('span', 'f3 hl push-userid').getText()
-        comment = push.find('span', 'f3 push-content').getText()
-        n_cm = searchKeyword(comment,keyword)
-        if(n_cm != 0):
-            #print(comment)
-            ww.commentCount += 1
-        n_cm_total += n_cm
-    ww.commentNum += n_cm_total
+    wwList_new = []
+    for ww in wwList:
+        kw = ww.keyword
+        soup = BeautifulSoup(text, 'lxml')
+        #title
+        title = getTitle(soup)
+        n_t = searchKeyword(title, kw)
+        ww.titleNum += n_t
+        #content
+        content = getContent(soup)
+        n_ct = searchKeyword(content, kw)
+        ww.contentNum += n_ct
+        #pushes
+        pushes = soup.find_all('div', 'push')
+        n_cm_total = 0
+        for push in pushes:
+            #ptt_id = push.find('span', 'f3 hl push-userid').getText()
+            comment = push.find('span', 'f3 push-content').getText()
+            n_cm = searchKeyword(comment, kw)
+            if(n_cm != 0):
+                #print(comment)
+                ww.commentCount += 1
+            n_cm_total += n_cm
+        ww.commentNum += n_cm_total
 
-    if(n_t + n_ct + n_cm_total != 0):
-        ww.articleCount += 1
+        if(n_t + n_ct + n_cm_total != 0):
+            ww.articleCount += 1
 
-    return ww
+        wwList_new.append(ww)
+
+    return wwList_new
 
 # search from file
 def searchText_Date(text,keyword, dw):
@@ -231,11 +236,15 @@ def searchKeyword(text,wordList):
         cnt += text.count(word)
     return cnt
 
+def checkDirectory(directory):
+    if not os.path.exists(directory):
+        os.makedirs(directory)
 # --------------------------------------------------------------------------------------------------
 # plot
 # --------------------------------------------------------------------------------------------------
 
 def plotHisto(names, numbers, title, show = False):
+    assert len(numbers) == len(names)
     N = len(numbers)
     ind = np.arange(N)    # the x locations for the groups
     width = 0.5      # the width of the bars: can also be len(x) sequence
@@ -244,8 +253,40 @@ def plotHisto(names, numbers, title, show = False):
     plt.title(title)
     plt.xticks(ind, names, rotation=15)
 
+    for i, num in enumerate(numbers):
+        plt.text(i-0.25, num + 1, str(num))
+
+    plt.tight_layout()
     if(show): plt.show()
-    else:  plt.savefig(filename=title+'.png', format='png')
+    else:  
+        directory = 'resultFigure/'
+        checkDirectory(directory)
+        plt.savefig(filename=directory+title+'.png', format='png')
+
+def plotMultiHisto(numbersList, names, titleList, plotTitle, show = False):
+
+    Nplot = len(numbersList)
+    for i in range(Nplot):
+        numbers = numbersList[i]
+        N = len(numbers)
+        ind = range(N)    # the x locations for the groups
+        width = 0.5      # the width of the bars: can also be len(x) sequence
+
+        subplotNum = Nplot*100+11+i
+        plt.subplot(subplotNum)
+        p1 = plt.bar(ind, numbers, width)
+        plt.title(titleList[i])
+        plt.xticks(ind, names)
+
+        for j, num in enumerate(numbers):
+            plt.text(j-0.25, num, str(num))
+
+    plt.tight_layout()
+    if(show): plt.show()
+    else:  
+        directory = 'resultFigure/'
+        checkDirectory(directory)
+        plt.savefig(filename=directory+plotTitle+'.png', format='png')
 
 # --------------------------------------------------------------------------------------------------
 # options
@@ -255,7 +296,7 @@ def removeSpacesAndSplit(line):
     return ' '.join(line.split()).split()
 
 def readOptions():
-    f = open('options.txt', 'r')
+    f = open('dofile.txt', 'r')
     options = f.read().split('\n')
     for option in options:
         argv = removeSpacesAndSplit(option)
@@ -263,7 +304,7 @@ def readOptions():
 
 def doOptions(argv):
     u_help = '-h'
-    u_search = '-s "forumName" "date(MMDD)" [-kw -id -ip] (id or ip)'
+    u_search = '-s "forumName" "date(MMDD)" [-kw -id -ip] (Keyword / ID / IP)'
     u_dofile = '-f'
 
     if(argv[0] == '-s'):
@@ -272,24 +313,9 @@ def doOptions(argv):
             print('usage:', u_search)
             sys.exit()
 
-
         a = time.time()
 
-        keyword=['台女', '母豬']
-
-        en_titleSearch=True # Use title to filter OR not
-        searchDate=False # print date distribution OR word summary
-
-        if(en_titleSearch): 
-            titleword=['女']
-
-        a_count = 0
-
-        ww = WordWrapper(keyword)
         forumName = argv[1]
-        # startPage = int(argv[2])
-        # pages = int(argv[3])
-        # opt = argv[4]
         dateStr = argv[2]
         opt = argv[3]
 
@@ -307,7 +333,25 @@ def doOptions(argv):
         pageStr = f.read().split(' ')
 
         if(opt == '-kw'):
-            #search from text file       
+            #search from text file  
+            if(len(argv) < 5): 
+                print('Error: Please input keywords after "-kw"')
+                sys.exit()        
+            keywordList=argv[4:]
+
+            # not in use
+            en_titleSearch=False # Use title to filter OR not
+            searchDate=False # print date distribution OR word summary
+            if(en_titleSearch): 
+                titleword=['女']
+
+            a_count = 0
+
+            _index = 0
+            wwList = []
+            for keyword in keywordList:
+                wwList.append(WordWrapper(keyword))   
+
             if(searchDate):
                 dw = DateWrapper()
                 if(en_titleSearch): dw_title = DateWrapper()
@@ -333,12 +377,12 @@ def doOptions(argv):
                                     dw_title.addDate(dateStr)
                                     dw = searchText_Date(text, keyword, dw)
                                 else:
-                                    ww = searchText(text, keyword, ww)
+                                    wwList = searchText(text, wwList)
                         else:
                             if(searchDate):
                                 dw = searchText_Date(text, keyword, dw)
                             else:
-                                ww = searchText(text, keyword, ww)
+                                wwList = searchText(text, wwList)
                         file.close()
                         fileCount += 1
                     except Exception as e:
@@ -360,7 +404,21 @@ def doOptions(argv):
             
             print('In', forumName, 'from page', pageStr[0], 'to', pageStr[1])
             if(en_titleSearch): print('Total titles that contain', titleword, ':', a_count)
-            ww.printSummary()
+
+            numbersList = [[], [], []]
+            names = []
+            titleList = ['In Title', 'In Content', 'In Pushes']
+
+            for ww in wwList:
+                ww.printSummary()
+                numbersList[0].append(ww.titleNum)
+                numbersList[1].append(ww.contentNum)
+                numbersList[2].append(ww.commentNum)
+                names.append(ww.keyword)
+
+            title = dateStr + '_' + forumName + '_Keyword_'
+            title += '_'.join(names)
+            plotMultiHisto(numbersList, names, titleList, title)
 
         elif(opt == '-id'):
             givenID = False
@@ -404,7 +462,9 @@ def doOptions(argv):
                             print(i, end=' ')
                         print()
                     index += 1
-                plotHisto(idList, matchCount, dateStr + ' ' + forumName + ' ID search')
+                title = dateStr + '_' + forumName + '_ID_'
+                title += '_'.join(idList)
+                plotHisto(idList, matchCount, title)
 
         elif(opt == '-ip'):
             givenIP = False
@@ -448,7 +508,9 @@ def doOptions(argv):
                             print(i, end=' ')
                         print()
                     index += 1
-                plotHisto(ipList, matchCount, dateStr + ' ' + forumName + ' IP search')
+                title = dateStr + '_' + forumName + '_IP_'
+                title += '_'.join(ipList)
+                plotHisto(ipList, matchCount, title)
                     
         else:
             print('option not correct: [-kw -id -ip] (id or ip)')
