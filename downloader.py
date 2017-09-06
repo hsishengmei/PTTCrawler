@@ -48,6 +48,10 @@ def downloadIndexPage(forumName, indexNum, directory):
             except Exception as e:
                  print('Error: downloadPage')
         articleCount += 1
+    try:
+        downloadPage('index', forumName, indexNum, url, directory)
+    except Exception as e:
+        print('Error: downloadPage')
 
 def downloadMissingPage(forumName, startPage, endPage, directory):
     print('downloading', forumName, 'from page', startPage, 'to', endPage)
