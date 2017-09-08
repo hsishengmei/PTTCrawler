@@ -2,7 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 import time
 import sys, os
-from wrapper import WordWrapper, DateWrapper
+from wrapper import WordWrapper
 from subprocess import Popen
 import numpy as np
 import matplotlib.pyplot as plt
@@ -212,32 +212,6 @@ def searchText(text, wwList):
 
     return wwList_new
 
-# search from file
-def searchText_Date(text,keyword, dw):
-    #a = time.time()
-    soup = BeautifulSoup(text, 'lxml')
-    #title
-    dateStr = getDate(soup)
-    title = getTitle(soup)
-    n_t = searchKeyword(title,keyword)
-    #content
-    content = getContent(soup)
-    n_ct = searchKeyword(content,keyword)
-    #pushes
-    pushes = soup.find_all('div', 'push')
-    n_cm_total = 0
-    for push in pushes:
-        #ptt_id = push.find('span', 'f3 hl push-userid').getText()
-        comment = push.find('span', 'f3 push-content').getText()
-        n_cm = searchKeyword(comment,keyword)
-        n_cm_total += n_cm
-
-    if(n_t + n_ct + n_cm_total != 0):
-        print(dateStr)
-        dw.addDate(dateStr)
-
-    return dw
-
 # get the number of previous page
 def getPrevPage(soup):
     s = str(soup.find_all('a', 'btn wide')[1])
@@ -246,10 +220,9 @@ def getPrevPage(soup):
     return int(s[x+5:y])
 
 # how many times keyword appears in text
-def searchKeyword(text,wordList):
+def searchKeyword(text,word):
     cnt=0
-    for word in wordList:
-        cnt += text.count(word)
+    cnt += text.count(word)
     return cnt
 
 def checkDirectory(directory):
@@ -285,14 +258,14 @@ def plotHisto(names, numbers, title, date, show = False):
 def plotMultiHisto(names, numbersList, titleList, plotTitle, date, show = False):
     Nhisto = len(numbersList)
     Nnames = len(numbersList[0])
-    plt.figure(figsize=(1.5*Nnames,2.5*Nhisto))
-    for i in range(Nplot):
+    plt.figure(figsize=(2*Nnames,2.5*Nhisto))
+    for i in range(Nhisto):
         numbers = numbersList[i]
         N = len(numbers)
         ind = range(N)    # the x locations for the groups
         width = 0.5      # the width of the bars: can also be len(x) sequence
 
-        subplotNum = Nplot*100+11+i
+        subplotNum = Nhisto*100+11+i
         plt.subplot(subplotNum)
         p1 = plt.bar(ind, numbers, width)
         plt.title(titleList[i])
@@ -319,11 +292,16 @@ def readOptions():
     options = f.read().split('\n')
     for option in options:
         argv = removeSpacesAndSplit(option)
+        if(len(argv)==0): continue
         doOptions(argv)
 
 def doOptions(argv):
     u_help = '-h'
-    u_search = '-s "forumName" "date(MMDD)" [-kw -id -ip] (Keyword / ID / IP)'
+    u_search = '-s "forumName" "date(MMDD)" [-kw -ti -id -ip] (Keyword / ID / IP)\n' 
+    u_search += '-kw : search keyword(s) in all text,  save record to "keyword_search.csv"\n'
+    u_search += '-ti : search keyword(s) in title,     save record to "summary.csv"\n'
+    u_search += '-id : search matching ID(s),          save record to "summary.csv"\n'
+    u_search += '-ip : search matching IP(s),          save record to "summary.csv"\n'
     u_dofile = '-f'
 
     if(argv[0] == '-s'):
@@ -340,11 +318,19 @@ def doOptions(argv):
 
         directory = '../results/' + dateStr + '/'
         checkDirectory(directory)
-        directory += 'summary.csv'
-        if not checkFileExists(directory):
-            with open(directory, 'w', newline='') as f:
+        directory_s = directory + 'summary.csv'
+        if not checkFileExists(directory_s):
+            with open(directory_s, 'w', newline='') as f:
                 writer = csv.writer(f)
-                writer.writerow(['搜尋方式', '看板', '時間', '作者ID', 'IP', '標題', '推', '噓', '箭頭', '檔案位置', 'URL'])  
+                writer.writerow(['搜尋方式', '看板', '時間', '作者ID', 'IP', '標題', '推', '噓', '箭頭',
+                '檔案位置', '網址'])  
+
+        directory_t = directory + 'keyword_search.csv'
+        if not checkFileExists(directory_t):   
+            with open(directory_t, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(['看板', '日期', '關鍵字', '標題出現次數', '內文出現次數', '推文出現次數', 
+                '有多少篇文章出現此關鍵字', '有多少則推文出現此關鍵字']  )
 
         fileCount = 0
         emptyFile = 0
@@ -360,29 +346,17 @@ def doOptions(argv):
         pageStr = f.read().split(' ')
 
         dataList = []
+
         if(opt == '-kw'):
-            #search from text file  
             if(len(argv) < 5): 
                 print('Error: Please input keywords after "-kw"')
                 sys.exit()        
             keywordList=argv[4:]
 
-            # not in use
-            en_titleSearch=False # Use title to filter OR not
-            searchDate=False # print date distribution OR word summary
-            if(en_titleSearch): 
-                titleword=['女']
-
-            a_count = 0
-
             _index = 0
             wwList = []
             for keyword in keywordList:
                 wwList.append(WordWrapper(keyword))   
-
-            if(searchDate):
-                dw = DateWrapper()
-                if(en_titleSearch): dw_title = DateWrapper()
 
             for j in range(int(pageStr[0]), int(pageStr[1])+1):
                 print('page', j)
@@ -391,53 +365,21 @@ def doOptions(argv):
                         file = open(directory+str(j)+'/'+str(j)+'_'+str(i)+'.txt', 'r')
                         text = file.read()
                         title = getTitleFromText(text)
-                        if(en_titleSearch):
-                            in_title=False 
-                            for t in titleword:
-                                if(title.find(t)!= -1): 
-                                    #print(t, 'in title')
-                                    in_title=True
-                            if(in_title): 
-                                print(title)
-                                a_count += 1
-                                dateStr=getDateFromText(text)
-                                if(searchDate):
-                                    dw_title.addDate(dateStr)
-                                    dw = searchText_Date(text, keyword, dw)
-                                else:
-                                    wwList = searchText(text, wwList)
-                        else:
-                            if(searchDate):
-                                dw = searchText_Date(text, keyword, dw)
-                            else:
-                                wwList = searchText(text, wwList)
+                        wwList = searchText(text, wwList)
+
                         file.close()
                         fileCount += 1
                     except Exception as e:
                         emptyFile += 1
             b = time.time()
             print('Total time:', round(b-a, 2))
-            if(searchDate):
-                if(en_titleSearch):
-                    print()
-                    print('titles that contain:', titleword)
-                    dw_title.printSummary() #print date the the title has titlewords
-                print()
-                print('in these articles that contain:', keyword)
-                dw.printSummary() #print date that the article has keywords
-                sys.exit()
-            else:
-                print('Total articles:', fileCount)
+            print('Total articles:', fileCount)
 
             
             print('In', forumName, 'from page', pageStr[0], 'to', pageStr[1])
-            if(en_titleSearch): print('Total titles that contain', titleword, ':', a_count)
 
             numbersList = [[], [], [], [], []]
             names = []
-            titleList = ['標題出現次數', '內文出現次數', '推文出現次數', 
-                '有多少篇文章出現此關鍵字', '有多少則推文出現此關鍵字']
-
             for ww in wwList:
                 ww.printSummary()
                 numbersList[0].append(ww.titleNum)
@@ -447,9 +389,91 @@ def doOptions(argv):
                 numbersList[4].append(ww.commentCount)
                 names.append(ww.keyword)
 
+                data = []
+                data.append(forumName)
+                data.append(dateStr[0:2]+'/'+dateStr[2:4])
+                data.append(ww.keyword)
+                data.append(ww.titleNum)
+                data.append(ww.contentNum)
+                data.append(ww.commentNum)
+                data.append(ww.articleCount)
+                data.append(ww.commentCount)
+                dataList.append(data)
+
+            titleList = ['標題出現次數', '內文出現次數', '推文出現次數', 
+                '有多少篇文章出現此關鍵字', '有多少則推文出現此關鍵字']
             title = dateStr + '_' + forumName + '_Keyword_'
             title += '_'.join(names)
-            plotMultiHisto(names, numbersList, titleList, title, dateStr)
+            plotMultiHisto(names, numbersList[:3], titleList[:3], title, dateStr)
+
+            with open('../results/' + dateStr + '/keyword_search.csv', 'a', newline='') as f:
+                writer = csv.writer(f)  
+                writer.writerows(dataList)
+
+        elif(opt == '-ti'):
+            #search from text file  
+            if(len(argv) < 5): 
+                print('Error: Please input keywords after "-ti"')
+                sys.exit()        
+            titlewordList=argv[4:]
+            matchCount=[]
+            matchTitleList = []
+            for i in titlewordList:
+                matchCount.append(0)
+                matchTitleList.append([])
+
+            for j in range(int(pageStr[0]), int(pageStr[1])+1):
+                print('page', j)
+                for i in range(20):
+                    try:
+                        file = open(directory+str(j)+'/'+str(j)+'_'+str(i)+'.txt', 'r')
+                        text = file.read()
+                        soup = text2soup(text)
+                        title = getTitle(soup)
+                        for n in range(len(titlewordList)):
+                            if(searchKeyword(title, titlewordList[n]) > 0):
+                                matchCount[n] += 1
+                                matchTitleList[n].append(title)
+                                #
+                                data = []   
+                                data.append('title_search')
+                                data.append(forumName)
+                                data.append(getTime(soup))
+                                data.append(getID(soup))
+                                data.append(getIP(soup))
+                                data.append(getTitle(soup))
+                                for n in countPushes(text): # 推 噓 箭頭
+                                    data.append(n)
+                                data.append(str(j)+'_'+str(i))
+                                data.append(text[:text.find('\n')]) # URL
+                                #
+                                dataList.append(data)
+                        file.close()
+                        fileCount += 1
+                    except Exception as e:
+                        emptyFile += 1
+
+            b = time.time()
+            print()
+            print('Total time:', round(b-a, 2))
+            print('Total articles:', fileCount)
+            print()
+
+            _index = 0
+            for titleword in titlewordList:
+                print('searching', titleword, 'in title:')
+                print('match count:', matchCount[_index])
+                for t in matchTitleList[_index]:
+                    print(t)
+                print()
+                _index += 1
+
+            title = dateStr + '_' + forumName + '_title'
+            plotHisto(titlewordList, matchCount, title, dateStr)
+
+            with open('../results/' + dateStr + '/summary.csv', 'a', newline='') as f:
+                writer = csv.writer(f)  
+                writer.writerows(dataList)
 
         elif(opt == '-id'):
             givenID = False
@@ -498,6 +522,12 @@ def doOptions(argv):
                         emptyFile += 1
                 if(not givenID): print('')
 
+            b = time.time()
+            print()
+            print('Total time:', round(b-a, 2))
+            print('Total articles:', fileCount)
+            print()
+
             index=0
             if(givenID): 
                 for id_s in idList:
@@ -514,8 +544,6 @@ def doOptions(argv):
                 with open('../results/' + dateStr + '/summary.csv', 'a', newline='') as f:
                     writer = csv.writer(f)  
                     writer.writerows(dataList)
-
-
 
         elif(opt == '-ip'):
             givenIP = False
@@ -564,6 +592,12 @@ def doOptions(argv):
                         emptyFile += 1
                 if(not givenIP): print('')
 
+            b = time.time()
+            print()
+            print('Total time:', round(b-a, 2))
+            print('Total articles:', fileCount)
+            print()
+
             index=0
             if(givenIP): 
                 for ip_s in ipList:
@@ -582,14 +616,13 @@ def doOptions(argv):
                     writer.writerows(dataList)
                     
         else:
-            print('option not correct: [-kw -id -ip] (id or ip)')
+            print('option not correct: [-kw -ti -id -ip] (keyword or id or ip)')
 
     else:        
         print('[OPTION]    | [USAGE]') 
         print('HELP        |', u_help)
-        print('SEARCH      |', u_search)
         print('DOFILE      |', u_dofile)
-        sys.exit()
+        print('SEARCH      |', u_search)
 
 # --------------------------------------------------------------------------------------------------
 # main
@@ -598,7 +631,7 @@ def doOptions(argv):
 def main():
     if not checkFileExists('../dofile.txt'):
         with open('../dofile.txt', 'w') as f:
-            f.write('--- type "py crawler.py" in cmd to see help ---\n')
+            # f.write('--- type "py crawler.py" in cmd to see help ---\n')
             f.write('---       delete all before you start       ---\n')                  
 
     checkDirectory('../results/')
