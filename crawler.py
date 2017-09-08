@@ -6,6 +6,7 @@ from wrapper import WordWrapper, DateWrapper
 from subprocess import Popen
 import numpy as np
 import matplotlib.pyplot as plt
+import csv
 
 # --------------------------------------------------------------------------------------------------
 # get functions
@@ -71,14 +72,25 @@ def getIPFromText(text):
     soup=text2soup(text)
     return getIP(soup)
     
-def getDate(text):
-    soup = BeautifulSoup(text, 'lxml')
+def getTime(soup):
     s=soup.find_all('span', 'article-meta-value')
-    timeStr=s[3].text
-    dateStr=timeStr[4:10]
-    return(dateStr)
+    return s[3].text
 
-def countPushes(soup):
+def getTimeFromText(text):
+    soup = text2soup(text)
+    return getTime(soup)
+
+def getDate(soup):
+    timeStr = getTime(soup)
+    dateStr = timeStr[4:10]
+    return dateStr
+
+def getDateFromText(text):
+    soup = text2soup(text)
+    return getDate(soup)
+
+def countPushes(text):
+    soup = text2soup(text)
     pushes = soup.find_all('span', 'hl push-tag')
     n_push = len(pushes)
     boos = soup.find_all('span', 'f1 hl push-tag')
@@ -91,6 +103,7 @@ def countPushes(soup):
     n_list.append(n_push)
     n_list.append(n_boo)
     n_list.append(n_arrow)
+    # print('推:', n_push, '\t噓:', n_boo,'\t箭頭:', n_arrow)
     return n_list
 
 def invalidDate(dateStr):
@@ -134,6 +147,9 @@ def getIndexDate(forumName, dateStr):
     url2 = '.html'  
     pageText = getPageText(url1+url2)
     pageNum = getPrevPage(text2soup(pageText))
+    pageJumpDefault = 64
+    # problems need to be fixed if forum is not Gossiping
+    # pageJump too big, cnnot find correct startpage
     dateptr = ''
     findEqual = True
     indexRange = []
@@ -141,7 +157,7 @@ def getIndexDate(forumName, dateStr):
     for i in range(2):
         found = False
         stage = 0
-        pageJump = 64
+        pageJump = pageJumpDefault
         while(not found):        
             pageText = getPageText(url1+str(pageNum)+url2) # text of prev page
             dateptr = index2date(pageText) # get date from index page
@@ -201,7 +217,7 @@ def searchText_Date(text,keyword, dw):
     #a = time.time()
     soup = BeautifulSoup(text, 'lxml')
     #title
-    dateStr = getDate(text)
+    dateStr = getDate(soup)
     title = getTitle(soup)
     n_t = searchKeyword(title,keyword)
     #content
@@ -239,33 +255,37 @@ def searchKeyword(text,wordList):
 def checkDirectory(directory):
     if not os.path.exists(directory):
         os.makedirs(directory)
+
+def checkFileExists(filename):
+    return os.path.isfile(filename)
 # --------------------------------------------------------------------------------------------------
 # plot
 # --------------------------------------------------------------------------------------------------
 
-def plotHisto(names, numbers, title, show = False):
+def plotHisto(names, numbers, title, date, show = False):
     assert len(numbers) == len(names)
     N = len(numbers)
     ind = np.arange(N)    # the x locations for the groups
     width = 0.5      # the width of the bars: can also be len(x) sequence
 
+    plt.figure(figsize=(1.2*N,4))
     p1 = plt.bar(ind, numbers, width)
     plt.title(title)
-    plt.xticks(ind, names, rotation=15)
+    plt.xticks(ind, names)
 
     for i, num in enumerate(numbers):
-        plt.text(i-0.25, num + 1, str(num))
+        plt.text(i, num, str(num))
 
-    plt.tight_layout()
     if(show): plt.show()
     else:  
-        directory = 'resultFigure/'
-        checkDirectory(directory)
-        plt.savefig(filename=directory+title+'.png', format='png')
+        directory = '../results/' + date + '/'
+        # checkDirectory(directory)
+        plt.savefig(filename=directory+title+'_'+'_'.join(names)+'.png', format='png')
 
-def plotMultiHisto(numbersList, names, titleList, plotTitle, show = False):
-
-    Nplot = len(numbersList)
+def plotMultiHisto(names, numbersList, titleList, plotTitle, date, show = False):
+    Nhisto = len(numbersList)
+    Nnames = len(numbersList[0])
+    plt.figure(figsize=(1.5*Nnames,2.5*Nhisto))
     for i in range(Nplot):
         numbers = numbersList[i]
         N = len(numbers)
@@ -279,13 +299,12 @@ def plotMultiHisto(numbersList, names, titleList, plotTitle, show = False):
         plt.xticks(ind, names)
 
         for j, num in enumerate(numbers):
-            plt.text(j-0.25, num, str(num))
+            plt.text(j, num, str(num))
 
-    plt.tight_layout()
     if(show): plt.show()
     else:  
-        directory = 'resultFigure/'
-        checkDirectory(directory)
+        directory = '../results/' + date + '/'
+        # checkDirectory(directory)
         plt.savefig(filename=directory+plotTitle+'.png', format='png')
 
 # --------------------------------------------------------------------------------------------------
@@ -296,7 +315,7 @@ def removeSpacesAndSplit(line):
     return ' '.join(line.split()).split()
 
 def readOptions():
-    f = open('dofile.txt', 'r')
+    f = open('../dofile.txt', 'r')
     options = f.read().split('\n')
     for option in options:
         argv = removeSpacesAndSplit(option)
@@ -319,10 +338,18 @@ def doOptions(argv):
         dateStr = argv[2]
         opt = argv[3]
 
+        directory = '../results/' + dateStr + '/'
+        checkDirectory(directory)
+        directory += 'summary.csv'
+        if not checkFileExists(directory):
+            with open(directory, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(['搜尋方式', '看板', '時間', '作者ID', 'IP', '標題', '推', '噓', '箭頭', '檔案位置', 'URL'])  
+
         fileCount = 0
         emptyFile = 0
 
-        directory = 'ptt/' + forumName + '/' + dateStr + '/'
+        directory = '../pttData/' + forumName + '/' + dateStr + '/'
         if not os.path.exists(directory):
             print('Error: No such forum or not downloaded yet ', end='')
             print('('+forumName+')')
@@ -332,6 +359,7 @@ def doOptions(argv):
         f = open(directory+'summary.txt', 'r')
         pageStr = f.read().split(' ')
 
+        dataList = []
         if(opt == '-kw'):
             #search from text file  
             if(len(argv) < 5): 
@@ -372,7 +400,7 @@ def doOptions(argv):
                             if(in_title): 
                                 print(title)
                                 a_count += 1
-                                dateStr=getDate(text)
+                                dateStr=getDateFromText(text)
                                 if(searchDate):
                                     dw_title.addDate(dateStr)
                                     dw = searchText_Date(text, keyword, dw)
@@ -405,20 +433,23 @@ def doOptions(argv):
             print('In', forumName, 'from page', pageStr[0], 'to', pageStr[1])
             if(en_titleSearch): print('Total titles that contain', titleword, ':', a_count)
 
-            numbersList = [[], [], []]
+            numbersList = [[], [], [], [], []]
             names = []
-            titleList = ['In Title', 'In Content', 'In Pushes']
+            titleList = ['標題出現次數', '內文出現次數', '推文出現次數', 
+                '有多少篇文章出現此關鍵字', '有多少則推文出現此關鍵字']
 
             for ww in wwList:
                 ww.printSummary()
                 numbersList[0].append(ww.titleNum)
                 numbersList[1].append(ww.contentNum)
                 numbersList[2].append(ww.commentNum)
+                numbersList[3].append(ww.articleCount)
+                numbersList[4].append(ww.commentCount)
                 names.append(ww.keyword)
 
             title = dateStr + '_' + forumName + '_Keyword_'
             title += '_'.join(names)
-            plotMultiHisto(numbersList, names, titleList, title)
+            plotMultiHisto(names, numbersList, titleList, title, dateStr)
 
         elif(opt == '-id'):
             givenID = False
@@ -437,13 +468,28 @@ def doOptions(argv):
                     try:
                         file = open(directory+str(j)+'/'+str(j)+'_'+str(i)+'.txt', 'r')
                         text = file.read()
-                        _id = getIDFromText(text)
+                        soup = text2soup(text)
+                        _id = getID(soup)
                         if(givenID):                                        
                             index = 0 
                             for id_s in idList:
                                 if(_id == id_s): 
                                     matchCount[index] += 1
                                     matchPageList[index].append(str(j)+'_'+str(i))
+                                    #
+                                    data = []
+                                    data.append('ID_search')
+                                    data.append(forumName)
+                                    data.append(getTime(soup))
+                                    data.append(getID(soup))
+                                    data.append(getIP(soup))
+                                    data.append(getTitle(soup))
+                                    for n in countPushes(text): # 推 噓 箭頭
+                                        data.append(n)
+                                    data.append(str(j)+'_'+str(i))
+                                    data.append(text[:text.find('\n')]) # URL
+                                    #
+                                    dataList.append(data)
                                 index += 1
                         else: 
                             print(_id, end='/')
@@ -462,9 +508,14 @@ def doOptions(argv):
                             print(i, end=' ')
                         print()
                     index += 1
-                title = dateStr + '_' + forumName + '_ID_'
-                title += '_'.join(idList)
-                plotHisto(idList, matchCount, title)
+                title = dateStr + '_' + forumName + '_ID'
+                plotHisto(idList, matchCount, title, dateStr)
+
+                with open('../results/' + dateStr + '/summary.csv', 'a', newline='') as f:
+                    writer = csv.writer(f)  
+                    writer.writerows(dataList)
+
+
 
         elif(opt == '-ip'):
             givenIP = False
@@ -483,13 +534,28 @@ def doOptions(argv):
                     try:
                         file = open(directory+str(j)+'/'+str(j)+'_'+str(i)+'.txt', 'r')
                         text = file.read()
-                        _ip = getIPFromText(text)
+                        soup = text2soup(text)
+                        _ip = getIP(soup)
                         if(givenIP):                                        
                             index = 0 
                             for ip_s in ipList:
                                 if(_ip == ip_s): 
                                     matchCount[index] += 1
                                     matchPageList[index].append(str(j)+'_'+str(i))
+                                    #
+                                    data = []
+                                    data.append('IP_search')
+                                    data.append(forumName)
+                                    data.append(getTime(soup))
+                                    data.append(getID(soup))
+                                    data.append(getIP(soup))
+                                    data.append(getTitle(soup))
+                                    for n in countPushes(text): # 推 噓 箭頭
+                                        data.append(n)
+                                    data.append(str(j)+'_'+str(i))
+                                    data.append(text[:text.find('\n')]) # URL
+                                    #
+                                    dataList.append(data)
                                 index += 1
                         else: 
                             print(_ip, end='/')
@@ -508,9 +574,12 @@ def doOptions(argv):
                             print(i, end=' ')
                         print()
                     index += 1
-                title = dateStr + '_' + forumName + '_IP_'
-                title += '_'.join(ipList)
-                plotHisto(ipList, matchCount, title)
+                title = dateStr + '_' + forumName + '_IP'
+                plotHisto(ipList, matchCount, title, dateStr)
+                
+                with open('../results/' + dateStr + '/summary.csv', 'a', newline='') as f:
+                    writer = csv.writer(f)  
+                    writer.writerows(dataList)
                     
         else:
             print('option not correct: [-kw -id -ip] (id or ip)')
@@ -527,6 +596,13 @@ def doOptions(argv):
 # --------------------------------------------------------------------------------------------------
 
 def main():
+    if not checkFileExists('../dofile.txt'):
+        with open('../dofile.txt', 'w') as f:
+            f.write('--- type "py crawler.py" in cmd to see help ---\n')
+            f.write('---       delete all before you start       ---\n')                  
+
+    checkDirectory('../results/')
+    checkDirectory('../pttData/')
     if(len(sys.argv) == 1): # no option
         argv = ['-h']
     else:
