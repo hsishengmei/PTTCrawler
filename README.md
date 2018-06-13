@@ -1,6 +1,13 @@
 # PTTCrawler
-Modules needed in Python3:
-requests / bs4 / lxml / numpy / matplotlib
+A web crawler for PTT, course project of Psychoinformatics and Neuroinformatics 2017 Spring
+-	Sending web requests and automatically clones articles from PTT for further analysis
+-	Search these cloned articles by user ID, IP address, title, or keyword in content
+-	Calculate the upvotes and downvotes of the selected articles
 
-Show Chinese in matplotlib:
-http://charlieblovett.pixnet.net/blog/post/309808972-python-matplotlib-%E7%84%A1%E6%B3%95%E9%A1%AF%E7%A4%BA%E4%B8%AD%E6%96%87
+### Usage
+- `python downloader.py "forumName" "date(MMDD)"`
+- `python crawler.py -s "forumName" "date(MMDD)" [-kw / -ti / -id / -ip] (desired Keyword / title / ID / IP)`
+
+### Environment:
+- recommend using Linux or Mac
+- `Python 3.5+`, `requests`, `bs4`, `lxml`, `numpy`, `matplotlib`
